@@ -8,7 +8,7 @@
 
 
 void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, float* A, float* B, float* C,float* D, size_t tile_size);
- 
+void fixed_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end);
 
 void
 fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, float* bias, float* input, float* output, int threads) {
@@ -25,7 +25,8 @@ fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, fl
 	for (size_t i = 0; i < num_thread; i++) {
 		auto end_col = start_col + n_cols;
 		thread.emplace_back([=] {
-			tile_multi_parrarel(data_cnt, start_col, end_col, matrix, bias, input, output, TILE_SIZE);
+			// tile_multi_parrarel(data_cnt, start_col, end_col, matrix, bias, input, output, TILE_SIZE);
+			fixed_tile_multi_parallel(matrix, bias, input, output, TILE_SIZE, data_cnt, input_dim, output_dim, start_col, end_col);
 		});
 		start_col += n_cols;
 	}
@@ -83,4 +84,30 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 
 
 
+}
+// 입력은 (1,4096) 가중치는 (4096,4096) 편향은 (1,4096) 출력은 (1,4096)
+
+void fixed_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end){
+	for( size_t col_chunck = start ; col_chunck < end; col_chunck += tile_size){
+		for (size_t row_chunck=0; row_chunck < data_cnt; row_chunck += tile_size){
+
+			for(size_t j = col_chunck ; j < col_chunck + tile_size ; j++){
+				for(size_t i = row_chunck; i < row_chunck+tile_size ; i++){
+					for(size_t p=0; p<tile_size;p++){
+						output[j*output_dim + i] +=
+							input[i*input_dim + j] *
+							matrix[i*output_dim + p ];
+					}
+				}
+			}
+
+			for(size_t bj = col_chunck; bj < tile_size; bj++){
+				for (size_t bi = row_chunck; bi < output_dim ; bi++){
+					output[bj*output_dim + bi] += bias[bi*data_cnt + bj];
+					output[bj*output_dim + bi] = ( output[bj*output_dim + bi] <  0.0f ) ? 0.0f : output[bj*output_dim + bi];
+				}
+			}
+
+		}
+	}
 }
