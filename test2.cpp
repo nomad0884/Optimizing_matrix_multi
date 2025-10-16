@@ -7,7 +7,7 @@
 #include <vector>
 
 
-void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, float* A, float* B, float* C,float* D, int tile_size);
+void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, float* A, float* B, float* C,float* D, size_t tile_size);
  
 
 void
@@ -22,7 +22,7 @@ fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, fl
 	size_t start_col = 0;
 	for (size_t i = 0; i < num_thread; i++) {
 		auto end_col = start_col + n_cols;
-		thread.emplace_back([&] {
+		thread.emplace_back([=] {
 			tile_multi_parrarel(data_cnt, start_col, end_col, matrix, bias, input, output, num_thread);
 		});
 		start_col += n_cols;
@@ -47,16 +47,7 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 	float overlap = data_cnt / tile_size;
 	for (size_t col_chunk = start_col; col_chunk < end_col; col_chunk += tile_size) {
 		for (size_t row_chunck = 0; row_chunck < data_cnt; row_chunck += tile_size) {
-			// output에 우선적으로 bias를 더해주는 연산
-			for(size_t col0=col_chunk; col0 <col_chunk+tile_size; col0++){
-				for(size_t row0 = row_chunck; row0 < row_chunck+tile_size; row0++){
-					for(size_t ix=0; ix<data_cnt;ix++){
-						D[(row0+row_chunck)*data_cnt +col0+ ix] += 
-						C[row0*data_cnt + ix];
-					}
-				
-				}
-			}
+
 
 
 			for (size_t tile = 0; tile < data_cnt; tile += tile_size) {
@@ -72,16 +63,16 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 
 			}
 
+			// 누적합 연산이 완료 된 후, bias를 더해주고 relu 함수 적용.
+
+			// 정확도는 더 떨어짐...
 			for(size_t col0=col_chunk; col0 <col_chunk+tile_size; col0++){
 				for(size_t row0 = row_chunck; row0 < row_chunck+tile_size; row0++){
-					for(size_t ix=0; ix<data_cnt;ix++){
-						float temp = D[(row0+row_chunck)*data_cnt +col0+ ix] ; 
-						if (temp < 0) D[(row0+row_chunck)*data_cnt +col0+ ix] = 0;
-					}
+					D[row0*data_cnt + col0] += C[col0];
+					D[row0*data_cnt + col0] =  (D[row0*data_cnt + col0] < 0.0f ) ? 0.0f : D[row0*data_cnt + col0];
 				
 				}
 			}
-
 
 		}
 	}
