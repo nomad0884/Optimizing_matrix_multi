@@ -20,10 +20,12 @@ fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, fl
 	size_t n_cols = data_cnt / num_thread;
 
 	size_t start_col = 0;
+
+	size_t TILE_SIZE = 16;
 	for (size_t i = 0; i < num_thread; i++) {
 		auto end_col = start_col + n_cols;
 		thread.emplace_back([=] {
-			tile_multi_parrarel(data_cnt, start_col, end_col, matrix, bias, input, output, num_thread);
+			tile_multi_parrarel(data_cnt, start_col, end_col, matrix, bias, input, output, TILE_SIZE);
 		});
 		start_col += n_cols;
 	}
@@ -44,7 +46,6 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 	// 그리고 최종에서 relu 한번으로 계산하면 됨.
 
 	// tile이기 때문에 col_chunck를 i0로 둬서, 다시 for loop을 제작해서 하면 됨.
-	float overlap = data_cnt / tile_size;
 	for (size_t col_chunk = start_col; col_chunk < end_col; col_chunk += tile_size) {
 		for (size_t row_chunck = 0; row_chunck < data_cnt; row_chunck += tile_size) {
 
