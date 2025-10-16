@@ -51,7 +51,7 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 			for(size_t col0=col_chunk; col0 <col_chunk+tile_size; col0++){
 				for(size_t row0 = row_chunck; row0 < row_chunck+tile_size; row0++){
 					for(size_t ix=0; ix<data_cnt;ix++){
-						D[(row0+row_chunck)*data_cnt + ix] += 
+						D[(row0+row_chunck)*data_cnt +col0+ ix] += 
 						C[row0*data_cnt + ix];
 					}
 				
@@ -66,13 +66,23 @@ void tile_multi_parrarel(size_t data_cnt, size_t start_col, size_t end_col, floa
 							D[(row + row_chunck) * data_cnt + col_chunk + idx] +=
 								A[(row + row_chunck) * data_cnt + tile + tile_row] *
 								B[tile * data_cnt + tile_row * data_cnt + col_chunk + idx];
-
-							if (D[(row + row_chunck) * data_cnt + col_chunk + idx] < 0) D[(row + row_chunck)* data_cnt + col_chunk + idx] = 0;
-							// ReLu function도 수정해야함. 
 						}
 					}
 				}
+
 			}
+
+			for(size_t col0=col_chunk; col0 <col_chunk+tile_size; col0++){
+				for(size_t row0 = row_chunck; row0 < row_chunck+tile_size; row0++){
+					for(size_t ix=0; ix<data_cnt;ix++){
+						float temp = D[(row0+row_chunck)*data_cnt +col0+ ix] ; 
+						if (temp < 0) D[(row0+row_chunck)*data_cnt +col0+ ix] = 0;
+					}
+				
+				}
+			}
+
+
 		}
 	}
 
