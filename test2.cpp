@@ -92,7 +92,12 @@
 			size_t j_max = std::min(col_chunck+tile_size, end);
 			for (size_t row_chunck=0; row_chunck < data_cnt; row_chunck += tile_size){
 				size_t i_max = std::min(row_chunck+tile_size, data_cnt);
-
+				
+				for(size_t t = row_chunck; t < i_max; t++){
+					for(size_t h = col_chunck; h < j_max; h++){
+						output[t*output_dim + h] = 0.0f;
+					}
+				}
 				for(size_t k_chunck=0; k_chunck < input_dim ; k_chunck+=tile_size){
 					size_t k_max = std::min(k_chunck+tile_size, input_dim);
 					
