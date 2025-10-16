@@ -29,24 +29,26 @@ fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, fl
 
 
 	std::size_t num_thread = threads;
-	std::vector<std::thread> thread;
-	thread.reserve(num_thread);
+	std::vector<std::thread> thread_pool;
+	thread_pool.reserve(num_thread);
 
-	std::sizt_t n_cols = data_cnt / num_thread;
+	std::size_t n_cols = data_cnt / num_thread;
 
 	size_t start_col = 0;
 	for (size_t i = 0; i < num_thread; i++) {
-		auto end_col = start_col + n_cols;
-		thread.emplace_back([&] {
-			tile_multi_parrarel(data_cnt, input_dim, output_dim, matrix, bias, input, output, threads)
+		size_t end_col = start_col + n_cols;
+
+		thread_pool.emplace_back([&, start_col, end_col]() {
+			tile_multi_parallel(data_cnt, input_dim, output_dim, matrix, bias, input, output, start_col, end_col, 16);
 			});
+
 		start_col += n_cols;
 	}
 
-	for (auto& t : thread) t.join();
+	for (auto& t : thread_pool)
+		t.join();
 
-	thread.clear();
-
+	thread_pool.clear();
 
 }
 
@@ -56,7 +58,7 @@ fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, fl
 
 void tile_multi(size_t data_cnt, size_t input_dim, size_t output_dim, float* A, float* B, float* C,float*D size_t start_col, size_t end_col, int tile_size) {
 	float overlap = data_cnt / tile_size;
-	for (size_t col_chunk = 0; col_chunck < data_cnt; col_chunck += tile_size) { // +16 Àº Å¸ÀÏ °³¼ö
+	for (size_t col_chunk = 0; col_chunck < data_cnt; col_chunck += tile_size) { // +16 ì€ íƒ€ì¼ ê°œìˆ˜
 		for (size_t row_chunck = 0; row_chunck < output_dim; row_chunck += tile_size) {
 			for (size_t aidx = 0; aidx < input_dim; aidx += tile_size) {
 
@@ -71,7 +73,7 @@ void tile_multi(size_t data_cnt, size_t input_dim, size_t output_dim, float* A, 
 
 							if (D(row + row_chunck) * data_cnt + col_chunck + idx] < 0) D(row + row_chunck)* data_cnt + col_chunck + idx] = 0;
 
-							// ³Ê¹« ¿¬»êÀ» ¸¹ÀÌ ÇÏ´Â °Å °°À½. instruction setÀÌ ¸¹¾ÆÁ®¼­ clock cycleÀÌ Ä¿Áú °Å °°À½..
+							// ë„ˆë¬´ ì—°ì‚°ì„ ë§Žì´ í•˜ëŠ” ê±° ê°™ìŒ. instruction setì´ ë§Žì•„ì ¸ì„œ clock cycleì´ ì»¤ì§ˆ ê±° ê°™ìŒ..
 							 
 						}
 
@@ -86,28 +88,31 @@ void tile_multi(size_t data_cnt, size_t input_dim, size_t output_dim, float* A, 
 	}
 }
 
-void tile_multi_pararrel(size_t data_cnt, size_t start_col, size_t end_col, float* A, float* B, float* C,float* D,  size_t start_col, size_t end_col, int tile_size) {
-	for (size_t col_chunk = start_col; col_chunk < end_col; col_chunk += tile_size) {
-		for (size_t row_chunck = 0; row_chunck < data_cnt; row_chunck += tile_size) {
-			for (size_t tile = 0; tile < data_cnt; tile += tile_size) {
+void tile_multi_parallel(size_t data_cnt, size_t input_dim, size_t output_dim,
+	float* A, float* B, float* C, float* D,
+	size_t start_col, size_t end_col, int tile_size)
+{
+	float overlap = static_cast<float>(data_cnt) / tile_size;
 
+	for (size_t col_chunk = start_col; col_chunk < end_col; col_chunk += tile_size) {
+		for (size_t row_chunk = 0; row_chunk < output_dim; row_chunk += tile_size) {
+			for (size_t tile = 0; tile < input_dim; tile += tile_size) {
 				for (size_t row = 0; row < tile_size; row++) {
 					for (size_t tile_row = 0; tile_row < tile_size; tile_row++) {
 						for (size_t idx = 0; idx < tile_size; idx++) {
-							D[(row + row_chunk) * data_cnt + col_chunck + idx] +=
-								A[(row + row_chunck) * data_cnt + tile + tile_row] *
-								B[tile * data_cnt + tile_row * data_cnt + col_chunck + idx] +
-								C[row_chunck * data_cnt + tile_row] / overlap;
+							size_t d_idx = (row + row_chunk) * data_cnt + col_chunk + idx;
 
-							if (D(row + row_chunck) * data_cnt + col_chunck + idx] < 0) D(row + row_chunck)* data_cnt + col_chunck + idx] = 0;
+							D[d_idx] +=
+								A[(row + row_chunk) * data_cnt + tile + tile_row] *
+								B[tile * data_cnt + tile_row * data_cnt + col_chunk + idx] +
+								C[row_chunk * data_cnt + tile_row] / overlap;
+
+							if (D[d_idx] < 0)
+								D[d_idx] = 0;
 						}
 					}
 				}
 			}
 		}
 	}
-
-
-
-
 }
