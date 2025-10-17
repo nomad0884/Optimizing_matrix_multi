@@ -147,11 +147,11 @@
                             
                             size_t j = col_chunck;
                             for(;j+16 <= j_max; j+=16){
-                                __m512 y = _mm512_load_ps(&output[i*output_dim + j]);
-                                __m512 w = _mm512_load_ps(&matrix[k*output_dim + j]);
+                                __m512 y = _mm512_loadu_ps(&output[i*output_dim + j]);
+                                __m512 w = _mm512_loadu_ps(&matrix[k*output_dim + j]);
 
                                 y = _mm512_fmadd_ps(temp,w,y);
-                                _mm512_store_ps(&output[i*output_dim +j],y);
+                                _mm512_storeu_ps(&output[i*output_dim +j],y);
                             }
 							for(; j<j_max;j++){
 								output[i*output_dim + j] += 
@@ -165,11 +165,11 @@
                 for(size_t i = row_chunck; i< i_max; i++){
                     size_t j = col_chunck;
 					for(; j+16<= j_max;j+=16){
-						__m512 y = _mm512_load_ps(&output[i*output_dim + j]);
-						__m512 b = _mm512_load_ps(&bias[j]);
+						__m512 y = _mm512_loadu_ps(&output[i*output_dim + j]);
+						__m512 b = _mm512_loadu_ps(&bias[j]);
 						y = _mm512_add_ps(y,b);
 						y = _mm512_max_ps(y,z);
-						_mm512_store_ps(&output[i*output_dim + j], y);
+						_mm512_storeu_ps(&output[i*output_dim + j], y);
 					}
 					for(;j<j_max;j++){
 						float v = output[i*output_dim + j] + bias[j];
