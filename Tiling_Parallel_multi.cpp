@@ -127,11 +127,11 @@
 		}
 	}
 
-__attribute__((target("avx512f,avx512dq,avx512bw,avx512vl,fma")))
-	
+
+	__attribute__((target("avx2,fma")))
 	void fixed2_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end){
         // transpose and fmadd를 하는게 낫나
-        __m512 z = _mm512_setzero_ps();
+        __m256 z = _mm256_setzero_ps();
         for( size_t col_chunck = start ; col_chunck < end ; col_chunck += tile_size){
             size_t j_max = std::min(col_chunck+tile_size, end);
 
@@ -143,15 +143,15 @@ __attribute__((target("avx512f,avx512dq,avx512bw,avx512vl,fma")))
 
                     for(size_t k = k_chunck ; k<k_max;k++){
                         for(size_t i=row_chunck; i < i_max; i++){
-                            __m512 temp = _mm512_set1_ps(input[i*input_dim + k]);
+                            __m256 temp = _mm256_set1_ps(input[i*input_dim + k]);
                             
                             size_t j = col_chunck;
-                            for(;j+16 <= j_max; j+=16){
-                                __m512 y = _mm512_loadu_ps(&output[i*output_dim + j]);
-                                __m512 w = _mm512_loadu_ps(&matrix[k*output_dim + j]);
+                            for(;j+8 <= j_max; j+=8){
+                                __m256 y = _mm256_load_ps(&output[i*output_dim + j]);
+                                __m256 w = _mm256_load_ps(&matrix[k*output_dim + j]);
 
-                                y = _mm512_fmadd_ps(temp,w,y);
-                                _mm512_storeu_ps(&output[i*output_dim +j],y);
+                                y = _mm256_fmadd_ps(temp,w,y);
+                                _mm256_store_ps(&output[i*output_dim +j],y);
                             }
 							for(; j<j_max;j++){
 								output[i*output_dim + j] += 
@@ -164,12 +164,12 @@ __attribute__((target("avx512f,avx512dq,avx512bw,avx512vl,fma")))
 
                 for(size_t i = row_chunck; i< i_max; i++){
                     size_t j = col_chunck;
-					for(; j+16<= j_max;j+=16){
-						__m512 y = _mm512_loadu_ps(&output[i*output_dim + j]);
-						__m512 b = _mm512_loadu_ps(&bias[j]);
-						y = _mm512_add_ps(y,b);
-						y = _mm512_max_ps(y,z);
-						_mm512_storeu_ps(&output[i*output_dim + j], y);
+					for(; j+8<= j_max;j+=8){
+						__m256 y = _mm256_load_ps(&output[i*output_dim + j]);
+						__m256 b = _mm256_load_ps(&bias[j]);
+						y = _mm256_add_ps(y,b);
+						y = _mm256_max_ps(y,z);
+						_mm256_storeu_ps(&output[i*output_dim + j], y);
 					}
 					for(;j<j_max;j++){
 						float v = output[i*output_dim + j] + bias[j];
@@ -179,6 +179,4 @@ __attribute__((target("avx512f,avx512dq,avx512bw,avx512vl,fma")))
                 }
             }
         }
-        
-}
-	
+	}
