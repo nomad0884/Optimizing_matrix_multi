@@ -127,7 +127,7 @@
 		}
 	}
 
-
+__attribute__((target("avx512f,avx512dq,avx512bw,avx512vl,fma")))
 	
 	void fixed2_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end){
         // transpose and fmadd를 하는게 낫나
@@ -179,4 +179,6 @@
                 }
             }
         }
-	}
+        
+}
+	
