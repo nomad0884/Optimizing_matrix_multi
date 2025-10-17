@@ -146,13 +146,17 @@
                             __m512 temp = _mm512_set1_ps(input[i*input_dim + k]);
                             
                             size_t j = col_chunck;
-                            for(;j+8 <= j_max; j+=8){
+                            for(;j+16 <= j_max; j+=16){
                                 __m512 y = _mm512_load_ps(&output[i*output_dim + j]);
                                 __m512 w = _mm512_load_ps(&matrix[k*output_dim + j]);
 
                                 y = _mm512_fmadd_ps(temp,w,y);
                                 _mm512_store_ps(&output[i*output_dim +j],y);
                             }
+							for(; j<j_max;j++){
+								output[i*output_dim + j] += 
+									input[i*input_dim + k] * matrix[k*output_dim + j];
+							}
                         }
                     }
                 }
@@ -160,11 +164,18 @@
 
                 for(size_t i = row_chunck; i< i_max; i++){
                     size_t j = col_chunck;
-                    __m512 y = _mm512_load_ps(&output[i*output_dim + j]);
-                    __m512 b = _mm512_load_ps(&bias[j]);
-                    y = _mm512_add_ps(y,b);
-                    y = _mm512_max_ps(y,z);
-                    _mm512_store_ps(&output[i*output_dim + j], y);
+					for(; j+16<= j_max;j+=16){
+						__m512 y = _mm512_load_ps(&output[i*output_dim + j]);
+						__m512 b = _mm512_load_ps(&bias[j]);
+						y = _mm512_add_ps(y,b);
+						y = _mm512_max_ps(y,z);
+						_mm512_store_ps(&output[i*output_dim + j], y);
+					}
+					for(;j<j_max;j++){
+						float v = output[i*output_dim + j] + bias[j];
+						output[i*output_dim + j] = std::max(v,0.0f);
+					}
+
                 }
             }
         }
