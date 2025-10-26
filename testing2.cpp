@@ -61,8 +61,7 @@
                             for(;j+8 <= j_max; j+=8){
                                 __m256 y = _mm256_load_ps(&output[i*output_dim + j]);
                                 __m256 w = _mm256_load_ps(&matrix[k*output_dim + j]);
-								__m256 b = _mm256_load_ps(&bias[j]);
-                                y = _mm256_fmadd_ps(temp,w,b);
+                                y = _mm256_fmadd_ps(temp,w,y);
                                 _mm256_store_ps(&output[i*output_dim +j],y);
 								//_mm256_stream_ps(&output[i*output_dim + j],y);
                             }
@@ -79,8 +78,8 @@
                     size_t j = col_chunck;
 					for(; j+8<= j_max;j+=8){
 						__m256 y = _mm256_load_ps(&output[i*output_dim + j]);
-						// __m256 b = _mm256_load_ps(&bias[j]);
-						// y = _mm256_add_ps(y,b);
+						__m256 b = _mm256_load_ps(&bias[j]);
+						y = _mm256_add_ps(y,b);
 						y = _mm256_max_ps(y,z);
 						// _mm256_storeu_ps(&output[i*output_dim + j], y);
 						_mm256_stream_ps(&output[i*output_dim+j],y);
