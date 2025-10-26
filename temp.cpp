@@ -1,16 +1,55 @@
+	#include <stdio.h>
+
+	#include <algorithm>
+	#include <cstdlib>
+	#include <random>
+	#include <thread>
+	#include <vector>
+	#include <immintrin.h>  
+
+	void fixed2_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end);
+
+	void
+	fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, float* bias, float* input, float* output, int threads) {
+
+		std::size_t num_thread = threads;
+		std::vector<std::thread> thread;
+		thread.reserve(num_thread);
+
+		size_t n_cols = data_cnt / num_thread;
+
+		size_t start_col = 0;
+
+		size_t TILE_SIZE =  256;
+		for (size_t i = 0; i < num_thread; i++) {
+			auto end_col = start_col + n_cols;
+			thread.emplace_back([=] {
+				fixed2_tile_multi_parallel(matrix, bias, input, output, TILE_SIZE, data_cnt, input_dim, output_dim, start_col, end_col);
+			});
+			start_col += n_cols;
+		}
+
+		for (auto& t : thread) t.join();
+
+		thread.clear();
+
+
+	}
+
+
+	
+
+
 __attribute__((target("avx2,fma")))
-void fixed2_tile_multi_parallel(float* __restrict__ matrix,
-                                float* __restrict__ bias,
-                                float* __restrict__ input,
-                                float* __restrict__ output,
-                                size_t tile_size,
-                                size_t data_cnt,
-                                size_t input_dim,
-                                size_t output_dim,
-                                size_t start,
-                                size_t end) 
+void fixed2_tile_multi_parallel(float*  matrix, float* bias, float*  input, float* output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end) 
 {
     __m256 z = _mm256_setzero_ps();
+
+	for(size_t i = start; i< end; i++){   // first-touch 초기화 . 각자 쓰레드 할당 영역에 대해서 먼저 작성하여 인근 cache , memory로 불러오는 것.  ( 미세한 성능 향상 ).
+		for(size_t j = 0; j< data_cnt; j+=8){
+			_mm256_store_ps(&output[i * output_dim + j], z);
+		}
+	}
 
     for (size_t col_chunk = start; col_chunk < end; col_chunk += tile_size) {
         size_t j_max = std::min(col_chunk + tile_size, end);
@@ -21,7 +60,6 @@ void fixed2_tile_multi_parallel(float* __restrict__ matrix,
             for (size_t k_chunk = 0; k_chunk < input_dim; k_chunk += tile_size) {
                 size_t k_max = std::min(k_chunk + tile_size, input_dim);
 
-                // ---- 핵심 구간: K루프 4×언롤 ----
                 for (size_t i = row_chunk; i < i_max; ++i) {
                     for (size_t k = k_chunk; k + 4 <= k_max; k += 4) {
                         __m256 a0 = _mm256_set1_ps(input[i * input_dim + (k + 0)]);
@@ -56,8 +94,8 @@ void fixed2_tile_multi_parallel(float* __restrict__ matrix,
                         }
                     }
 
-                    // 남은 k (mod 4) 처리
-                    for (size_t k = (k_max & ~3UL); k < k_max; ++k) {
+                    // 남은 K 처리하는 loop
+                    for (size_t k = (k_max & ~3UL); k < k_max; ++k) {   // 4개씩 덩어리로 처리 안되는 것들에 대한 나머지 연산.  tile size가 2의 배수면 연산이 없을 듯.
                         __m256 a = _mm256_set1_ps(input[i * input_dim + k]);
                         size_t j = col_chunk;
                         for (; j + 8 <= j_max; j += 8) {
@@ -73,7 +111,7 @@ void fixed2_tile_multi_parallel(float* __restrict__ matrix,
                 }
             }
 
-            // ---- Fused bias + ReLU ----
+			// bias 더하기, ReLU 연산.
             for (size_t i = row_chunk; i < i_max; ++i) {
                 size_t j = col_chunk;
                 for (; j + 8 <= j_max; j += 8) {
