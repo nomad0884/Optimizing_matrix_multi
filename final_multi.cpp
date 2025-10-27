@@ -11,6 +11,11 @@
 	// Notion Link : https://tranquil-diplodocus-d1c.notion.site/Lab-1-Optimized-Nueral-Network-Software-289ebcfb1de180a887cfe33eb83c1e36?pvs=73
 
 
+
+	// 최적의 tile size는 256으로 산정됨.
+	// thread 개수는 8개가 최적이었음. thread는 2의 n 승으로 넣어야 새그멘테이션 오류가 안남. 입력 data를 고려함. 
+	// 남은 열 연산 방식이 tile size, thread가 2의 n 승이어야 최적의 상태임. 
+
 	void tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end);
 
 	void
@@ -20,7 +25,7 @@
 		std::vector<std::thread> thread;
 		thread.reserve(num_thread);
 
-		size_t n_cols = data_cnt / num_thread;
+		size_t n_cols = data_cnt / num_thread;  
 
 		size_t start_col = 0;
 
@@ -66,7 +71,7 @@ void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* outp
 
                 for (size_t i = row_chunk; i < i_max; ++i) {
                     for (size_t k = k_chunk; k + 4 <= k_max; k += 4) {
-						// input의 K~ 열의 value들을 받아와서 8개의 float vector로 구현. 
+						// input의 K~ 열의 value들을 받아와서 8개의 float vector로 구현.   (8 * 4)
                         __m256 a0 = _mm256_set1_ps(input[i * input_dim + (k + 0)]);
                         __m256 a1 = _mm256_set1_ps(input[i * input_dim + (k + 1)]);
                         __m256 a2 = _mm256_set1_ps(input[i * input_dim + (k + 2)]);
@@ -76,14 +81,14 @@ void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* outp
                         for (; j + 8 <= j_max; j += 8) {
                             __m256 y  = _mm256_load_ps(&output[i * output_dim + j]);
 							
-							// input과 matrix k행 j열 계산. 8개씩 계산하기 때문에 동일. 
+							// input과 matrix k행 j열 계산. 8개씩 계산하기 때문에 동일. (4* 8)
                             __m256 w0 = _mm256_load_ps(&matrix[(k + 0) * output_dim + j]);
                             __m256 w1 = _mm256_load_ps(&matrix[(k + 1) * output_dim + j]);
                             __m256 w2 = _mm256_load_ps(&matrix[(k + 2) * output_dim + j]);
                             __m256 w3 = _mm256_load_ps(&matrix[(k + 3) * output_dim + j]);
 							
 							// output i행 j열에 중복 연산을 store. 
-                            y = _mm256_fmadd_ps(a0, w0, y);
+                            y = _mm256_fmadd_ps(a0, w0, y);  // 누적 sum. 
                             y = _mm256_fmadd_ps(a1, w1, y);
                             y = _mm256_fmadd_ps(a2, w2, y);
                             y = _mm256_fmadd_ps(a3, w3, y);
@@ -111,7 +116,7 @@ void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* outp
                             y = _mm256_fmadd_ps(a, w, y);
                             _mm256_store_ps(&output[i * output_dim + j], y);
                         }
-                        for (; j < j_max; ++j) {
+                        for (; j < j_max; ++j) {  // 남은 열 연산. 
                             output[i * output_dim + j] += input[i * input_dim + k] * matrix[k * output_dim + j];
                         }
                     }
@@ -128,7 +133,7 @@ void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* outp
                     y = _mm256_max_ps(y, z);
                     _mm256_stream_ps(&output[i * output_dim + j], y);
                 }
-                for (; j < j_max; ++j) {
+                for (; j < j_max; ++j) {   // 남은 열 연산. 
                     float v = output[i * output_dim + j] + bias[j];
                     output[i * output_dim + j] = (v > 0.0f) ? v : 0.0f;
                 }
