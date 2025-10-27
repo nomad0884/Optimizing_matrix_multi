@@ -7,7 +7,11 @@
 	#include <vector>
 	#include <immintrin.h>  
 
-	void fixed2_tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end);
+	// GitHub Link : https://github.com/nomad0884/Optimizing_matrix_multi 
+	// Notion Link : https://tranquil-diplodocus-d1c.notion.site/Lab-1-Optimized-Nueral-Network-Software-289ebcfb1de180a887cfe33eb83c1e36?pvs=73
+
+
+	void tile_multi_parallel(float* matrix, float*bias, float* input, float*output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end);
 
 	void
 	fc_layer(size_t data_cnt, size_t input_dim, size_t output_dim, float* matrix, float* bias, float* input, float* output, int threads) {
@@ -24,7 +28,7 @@
 		for (size_t i = 0; i < num_thread; i++) {
 			auto end_col = start_col + n_cols;
 			thread.emplace_back([=] {
-				fixed2_tile_multi_parallel(matrix, bias, input, output, TILE_SIZE, data_cnt, input_dim, output_dim, start_col, end_col);
+				tile_multi_parallel(matrix, bias, input, output, TILE_SIZE, data_cnt, input_dim, output_dim, start_col, end_col);
 			});
 			start_col += n_cols;
 		}
@@ -41,7 +45,7 @@
 
 
 __attribute__((target("avx2,fma")))
-void fixed2_tile_multi_parallel(float*  matrix, float* bias, float*  input, float* output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end) 
+void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* output, size_t tile_size, size_t data_cnt, size_t input_dim, size_t output_dim, size_t start, size_t end) 
 {
     __m256 z = _mm256_setzero_ps();
 
@@ -62,6 +66,7 @@ void fixed2_tile_multi_parallel(float*  matrix, float* bias, float*  input, floa
 
                 for (size_t i = row_chunk; i < i_max; ++i) {
                     for (size_t k = k_chunk; k + 4 <= k_max; k += 4) {
+						// input의 K~ 열의 value들을 받아와서 8개의 float vector로 구현. 
                         __m256 a0 = _mm256_set1_ps(input[i * input_dim + (k + 0)]);
                         __m256 a1 = _mm256_set1_ps(input[i * input_dim + (k + 1)]);
                         __m256 a2 = _mm256_set1_ps(input[i * input_dim + (k + 2)]);
@@ -70,12 +75,14 @@ void fixed2_tile_multi_parallel(float*  matrix, float* bias, float*  input, floa
                         size_t j = col_chunk;
                         for (; j + 8 <= j_max; j += 8) {
                             __m256 y  = _mm256_load_ps(&output[i * output_dim + j]);
-
+							
+							// input과 matrix k행 j열 계산. 8개씩 계산하기 때문에 동일. 
                             __m256 w0 = _mm256_load_ps(&matrix[(k + 0) * output_dim + j]);
                             __m256 w1 = _mm256_load_ps(&matrix[(k + 1) * output_dim + j]);
                             __m256 w2 = _mm256_load_ps(&matrix[(k + 2) * output_dim + j]);
                             __m256 w3 = _mm256_load_ps(&matrix[(k + 3) * output_dim + j]);
-
+							
+							// output i행 j열에 중복 연산을 store. 
                             y = _mm256_fmadd_ps(a0, w0, y);
                             y = _mm256_fmadd_ps(a1, w1, y);
                             y = _mm256_fmadd_ps(a2, w2, y);
