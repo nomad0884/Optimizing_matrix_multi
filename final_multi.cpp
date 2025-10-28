@@ -29,7 +29,7 @@
 
 		size_t start_col = 0;
 
-		size_t TILE_SIZE =  256;
+		size_t TILE_SIZE =  128;   // 여러 연산 수행 끝에 128이 최적의 tile size. 
 		for (size_t i = 0; i < num_thread; i++) {
 			auto end_col = start_col + n_cols;
 			thread.emplace_back([=] {
@@ -131,7 +131,7 @@ void tile_multi_parallel(float*  matrix, float* bias, float*  input, float* outp
                     __m256 b = _mm256_load_ps(&bias[j]);
                     y = _mm256_add_ps(y, b);
                     y = _mm256_max_ps(y, z);
-                    _mm256_stream_ps(&output[i * output_dim + j], y);
+                    _mm256_store_ps(&output[i * output_dim + j], y);   // loss 구하는 과정에서 다시 접근하기 때문에 store로 변경. 
                 }
                 for (; j < j_max; ++j) {   // 남은 열 연산. 
                     float v = output[i * output_dim + j] + bias[j];
